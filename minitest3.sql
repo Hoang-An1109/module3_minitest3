@@ -177,7 +177,106 @@ inner join Nhacungcap ncc on ddh.nha_cung_cap_id = ncc.id
 inner join Vattu vt on ctpn.vat_tu_id = vt.id;
 
 
+-- Câu 5. Tạo view có tên vw_CTPNHAP_loc  bao gồm các thông tin sau: 
+-- số phiếu nhập hàng, mã vật tư, số lượng nhập, đơn giá nhập, thành tiền nhập. Và chỉ liệt kê các chi tiết nhập có số lượng nhập > 5.
+create view vw_CTPNHAP_loc as
+select pn.so_phieu_nhap, vt.ma_vat_tu, so_luong_nhap, don_gia_nhap, so_luong_nhap*don_gia_nhap as "thanh_tien_nhap" from CTPhieunhap ctpn
+inner join Phieunhap pn on ctpn.phieu_nhap_id = pn.id
+inner join Vattu vt on ctpn.vat_tu_id = vt.id
+where so_luong_nhap > 5;
 
+-- Câu 6. Tạo view có tên vw_CTPNHAP_VT_loc bao gồm các thông tin sau: 
+-- số phiếu nhập hàng, mã vật tư, tên vật tư, số lượng nhập, đơn giá nhập, thành tiền nhập. Và chỉ liệt kê các chi tiết nhập vật tư có đơn vị tính là Bộ.
+create view vw_CTPNHAP_VT_loc as
+select pn.so_phieu_nhap, vt.ma_vat_tu, vt.ten_vat_tu, so_luong_nhap, don_gia_nhap, so_luong_nhap*don_gia_nhap as "thanh_tien_nhap" from CTPhieunhap ctpn
+inner join Phieunhap pn on ctpn.phieu_nhap_id = pn.id
+inner join Vattu vt on ctpn.vat_tu_id = vt.id
+where vt.don_vi_tinh like 'Bộ';
 
+-- Câu 7. Tạo view có tên vw_CTPXUAT bao gồm các thông tin sau: số phiếu xuất hàng, mã vật tư, số lượng xuất, đơn giá xuất, thành tiền xuất.
+create view vw_CTPXUAT as
+select count(px.id) as "Số phiếu xuất hàng", vt.ma_vat_tu, so_luong_xuat, don_gia_xuat, so_luong_xuat*don_gia_xuat as " Thành tiền xuất" from ctphieuxuat ctpx
+inner join phieuxuat px on ctpx.phieu_xuat_id = px.id
+inner join vattu vt on ctpx.vat_tu_id = vt.id
+group by px.id, vt.ma_vat_tu, so_luong_xuat, don_gia_xuat, so_luong_xuat*don_gia_xuat;
+
+-- Câu 8. Tạo view có tên vw_CTPXUAT_VT bao gồm các thông tin sau: số phiếu xuất hàng, mã vật tư, tên vật tư, số lượng xuất, đơn giá xuất.
+create view vw_CTPXUAT_VT as
+select count(px.id) as "Số phiếu xuất hàng", vt.ma_vat_tu, vt.ten_vat_tu, so_luong_xuat, don_gia_xuat from ctphieuxuat ctpx
+inner join phieuxuat px on ctpx.phieu_xuat_id = px.id
+inner join vattu vt on ctpx.vat_tu_id = vt.id
+group by px.id, vt.ma_vat_tu, vt.ten_vat_tu, so_luong_xuat, don_gia_xuat;
+
+-- Câu 9. Tạo view có tên vw_CTPXUAT_VT_PX bao gồm các thông tin sau: số phiếu xuất hàng, tên khách hàng, mã vật tư, tên vật tư, số lượng xuất, đơn giá xuất.
+create view vw_CTPXUAT_VT_PX as
+select count(px.id) as "Số phiếu xuất hàng", px.ten_khach_hang, vt.ma_vat_tu, vt.ten_vat_tu, so_luong_xuat, don_gia_xuat from ctphieuxuat ctpx
+inner join phieuxuat px on ctpx.phieu_xuat_id = px.id
+inner join vattu vt on ctpx.vat_tu_id = vt.id
+group by px.id, px.ten_khach_hang, vt.ma_vat_tu, vt.ten_vat_tu, so_luong_xuat, don_gia_xuat;
+
+-- Tạo các stored procedure sau
+
+-- Câu 1. Tạo Stored procedure (SP) cho biết tổng số lượng cuối của vật tư với mã vật tư là tham số vào.
+delimiter //
+create procedure tong_so_luong_cuoi(in in_ma_vat_tu int)
+begin
+	select vt.id, vt.ma_vat_tu, vt.ten_vat_tu, sum(so_luong_dau + tong_so_luong_nhap - tong_so_luong_xuat) as "Tổng số lượng cuối", vt.don_vi_tinh, vt.gia_tien from tonkho tk
+	inner join vattu vt on tk.vat_tu_id = vt.id
+	where in_ma_vat_tu = vt.ma_vat_tu
+	group by vt.id, vt.ma_vat_tu, vt.ten_vat_tu, vt.don_vi_tinh, vt.gia_tien;
+end //
+delimiter ;
+
+-- Câu 2. Tạo SP cho biết tổng tiền xuất của vật tư với mã vật tư là tham số vào.
+delimiter //
+create procedure tong_tien_xuat(in in_ma_vat_tu int)
+begin
+	select ma_vat_tu, ten_vat_tu, sum(ctpx.so_luong_xuat * ctpx.don_gia_xuat) as "Tổng tiền xuất" from vattu vt
+	inner join ctphieuxuat ctpx on ctpx.vat_tu_id = vt.id
+	where in_ma_vat_tu = vt.ma_vat_tu
+	group by ma_vat_tu, ten_vat_tu;
+end //
+delimiter ;
+
+-- Câu 3. Tạo SP cho biết tổng số lượng đặt theo số đơn hàng với số đơn hàng là tham số vào.
+delimiter //
+create procedure tong_so_luong_dat(in in_ma_don int)
+begin
+	select ma_don, sum(ctdh.so_luong_dat) as "Tổng số lượng đặt" from dondathang ddh
+	inner join ctdonhang ctdh on ctdh.don_hang_id = ddh.id 
+	where ddh.ma_don = in_ma_don
+	group by ma_don;
+end //
+delimiter ;
+
+-- Câu 4. Tạo SP dùng để thêm một đơn đặt hàng.
+delimiter //
+create procedure them_mot_don_hang(in id int, in ma_don int, in ngay_dat_hang date, in nha_cung_cap_id int)
+begin
+	insert into dondathang values (id, ma_don, ngay_dat_hang, nha_cung_cap_id);
+end //
+delimiter ;
+
+-- Câu 5. Tạo SP dùng để thêm một chi tiết đơn đặt hàng.
+delimiter //
+create procedure them_mot_ct_don_hang(in id int, in don_hang_id int, in vat_tu_id int, so_luong_dat int)
+begin
+	insert into ctdonhang values (id, don_hang_id, vat_tu_id, so_luong_dat);
+end //
+delimiter ;
+
+-- Câu 6. Tại SP dùng để xoá 1 nhà cung cấp theo id. Trong đó:
+-- 			+Tất cả những khoá ngoại đến nhà cung cấp chuyển thành null
+-- 			+Xoá nhà cung cấp.
+delimiter //
+create procedure xoa_nha_cung_cap (in in_id int)
+begin
+	update dondathang set nha_cung_cap_id = null where nha_cung_cap_id = in_id;
+	delete from nhacungcap where id = in_id;
+end //
+delimiter ;
+
+insert into Nhacungcap values (10, 1010, 'Nhà cung cấp X', 'Địa chỉ X', 123456789);
+insert into Dondathang values (10, 2010, '2024-04-15', 10);
 
 
